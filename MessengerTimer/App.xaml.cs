@@ -1,8 +1,10 @@
 ﻿using System;
 using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
+using Windows.UI.ViewManagement;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Media.Animation;
 using Windows.UI.Xaml.Navigation;
 
 namespace MessengerTimer {
@@ -15,6 +17,8 @@ namespace MessengerTimer {
         /// 已执行，逻辑上等同于 main() 或 WinMain()。
         /// </summary>
         /// 
+
+        public static MainPage MainPageInstance;
 
         public App() {
             this.InitializeComponent();
@@ -45,12 +49,15 @@ namespace MessengerTimer {
                 Window.Current.Content = rootFrame;
             }
 
+            rootFrame.ContentTransitions = new TransitionCollection();
+            rootFrame.ContentTransitions.Add(new NavigationThemeTransition());
+
             if (e.PrelaunchActivated == false) {
                 if (rootFrame.Content == null) {
                     // 当导航堆栈尚未还原时，导航到第一页，
                     // 并通过将所需信息作为导航参数传入来配置
                     // 参数
-                    rootFrame.Navigate(typeof(MainPage), e.Arguments);
+                    rootFrame.Navigate(typeof(MainPage), e.Arguments, new EntranceNavigationTransitionInfo());
                 }
                 // 确保当前窗口处于活动状态
                 Window.Current.Activate();

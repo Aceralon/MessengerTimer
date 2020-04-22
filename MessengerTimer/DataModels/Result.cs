@@ -3,14 +3,19 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using Windows.UI.Xaml;
+using Windows.UI.Xaml.Controls;
 
 namespace MessengerTimer.DataModels {
     public class AllResults {
         [JsonProperty(nameof(ResultGroups))]
         public ObservableCollection<ResultGroup> ResultGroups { get; set; }
+
+        public ResultGroup CurrentGroup() => ResultGroups[App.MainPageInstance.appSettings.CurrentDataGroupIndex];
 
         public static AllResults FromJson(string json) => JsonConvert.DeserializeObject<AllResults>(json, Converter.Settings);
     }
@@ -26,6 +31,9 @@ namespace MessengerTimer.DataModels {
                 NotifyPropertyChanged();
             }
         }
+
+        [JsonProperty(nameof(ScrambleType))]
+        public ScrambleType ScrambleType { get; set; }
 
         [JsonProperty(nameof(Results))]
         public ObservableCollection<Result> Results { get; set; }
@@ -46,55 +54,89 @@ namespace MessengerTimer.DataModels {
         private double _ao5Value;
         private double _ao12Value;
         private double _resultValue;
-        private Punishment _resltPunishment;
+        private Punishment _resultPunishment;
+        private string _scramble;
 
-        public static string GetFormattedString(double value) {
-            switch (MainPage.appSettings.TimerFormat) {
+        public static string GetFormattedString(double value, Punishment punishment = Punishment.None) {
+            if (value < 0)
+                return "DNF";//when aoNValue need to be DNF, it will be assigned by -1
+            switch (App.MainPageInstance.appSettings.TimerFormat) {
                 case TimerFormat.MMSSFF:
-                    //Todo
-                    return string.Empty;
+                    if (double.IsNaN(value)) {
+                        return double.NaN.ToString();
+                    }
+                    switch (punishment) {
+                        case Punishment.None:
+                            return TimeSpan.FromSeconds(value).ToString("mmssff").Insert(2, ":").Insert(5, ".");
+                        case Punishment.PlusTwo:
+                            return TimeSpan.FromSeconds(value + 2).ToString("mmssff").Insert(2, ":").Insert(5, ".") + "+";
+                        case Punishment.DNF:
+                            return "DNF";
+                        default:
+                            return TimeSpan.FromSeconds(value).ToString("mmssfff").Insert(2, ":").Insert(5, ".");
+                    }
                 case TimerFormat.MMSSFFF:
-                    //Todo
-                    return string.Empty;
+                    if (double.IsNaN(value)) {
+                        return double.NaN.ToString();
+                    }
+                    switch (punishment) {
+                        case Punishment.None:
+                            return TimeSpan.FromSeconds(value).ToString("mmssfff").Insert(2, ":").Insert(5, ".");
+                        case Punishment.PlusTwo:
+                            return TimeSpan.FromSeconds(value + 2).ToString("mmssfff").Insert(2, ":").Insert(5, ".") + "+";
+                        case Punishment.DNF:
+                            return "DNF";
+                        default:
+                            return TimeSpan.FromSeconds(value).ToString("mmssfff").Insert(2, ":").Insert(5, ".");
+                    }
                 case TimerFormat.SSFF:
-                    return value.ToString("F2");
+                    switch (punishment) {
+                        case Punishment.None:
+                            return value.ToString("F2");
+                        case Punishment.PlusTwo:
+                            return (value + 2).ToString("F2") + "+";
+                        case Punishment.DNF:
+                            return "DNF";
+                        default:
+                            return value.ToString("F2");
+                    }
                 case TimerFormat.SSFFF:
-                    return value.ToString("F3");
+                    switch (punishment) {
+                        case Punishment.None:
+                            return value.ToString("F3");
+                        case Punishment.PlusTwo:
+                            return (value + 2).ToString("F3") + "+";
+                        case Punishment.DNF:
+                            return "DNF";
+                        default:
+                            return value.ToString("F3");
+                    }
                 default:
                     return string.Empty;
             }
         }
 
-        [JsonProperty(nameof(ResultString))]
-        public string ResultString {
-            get => GetFormattedString(ResultValue);
-        }
+        public string ResultString => GetFormattedString(ResultValue, ResultPunishment);
 
-        [JsonProperty(nameof(Ao5String))]
-        public string Ao5String {
-            get => GetFormattedString(Ao5Value);
-        }
+        public string Ao5String => GetFormattedString(Ao5Value);
 
-        [JsonProperty(nameof(Ao12String))]
-        public string Ao12String {
-            get => GetFormattedString(Ao12Value);
-        }
+        public string Ao12String => GetFormattedString(Ao12Value);
 
         [JsonProperty(nameof(ResultValue))]
         public double ResultValue {
             get => _resultValue;
             set {
                 _resultValue = value;
-                NotifyPropertyChanged();
+                NotifyPropertyChanged("ResultString");
             }
         }
 
         [JsonProperty(nameof(ResultPunishment))]
         public Punishment ResultPunishment {
-            get => _resltPunishment;
+            get => _resultPunishment;
             set {
-                _resltPunishment = value;
-                NotifyPropertyChanged();
+                _resultPunishment = value;
+                NotifyPropertyChanged("ResultString");
             }
         }
 
@@ -110,7 +152,7 @@ namespace MessengerTimer.DataModels {
         public double Ao5Value {
             get => _ao5Value; set {
                 _ao5Value = value;
-                NotifyPropertyChanged();
+                NotifyPropertyChanged("Ao5String");
             }
         }
 
@@ -118,21 +160,37 @@ namespace MessengerTimer.DataModels {
         public double Ao12Value {
             get => _ao12Value; set {
                 _ao12Value = value;
-                NotifyPropertyChanged();
+                NotifyPropertyChanged("Ao12String");
+            }
+        }
+
+        [JsonProperty(nameof(Scramble))]
+        public string Scramble {
+            get => _scramble; set {
+                _scramble = value;
+                NotifyPropertyChanged("Scramble");
             }
         }
 
         public Result() { }
 
-        public Result(double resultValue, int id) {
+        public Result(int id, Result r) {
             Id = id;
-            ResultPunishment = Punishment.None;
+            ResultValue = r.ResultValue;
+            ResultPunishment = r.ResultPunishment;
+            Scramble = r.Scramble;
+        }
+
+        public Result(double resultValue, int id, Punishment punishment, string scramble) {
+            Id = id;
+            ResultPunishment = punishment;
             ResultValue = Math.Round(resultValue, 3);
+            Scramble = scramble;
         }
 
 
-        public Result(int Id, double resultValue, double ao5Value, double ao12Value) {
-            this.Id = Id;
+        public Result(int id, double resultValue, double ao5Value, double ao12Value) {
+            this.Id = id;
             ResultValue = resultValue;
             Ao5Value = ao5Value;
             Ao12Value = ao12Value;
